@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -168,7 +168,10 @@
 
     <script>
         const TARGET_API = "https://api.cdnlivetv.tv/api/v1/channels/?user=cdnlivetv&plan=free";
-        const API_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(TARGET_API)}`;
+        
+        // Do proxies ka setup kiya hai, ek fail ho toh dusri chal jaye
+        const PROXY_1 = `https://corsproxy.io/?${encodeURIComponent(TARGET_API)}`;
+        const PROXY_2 = `https://api.allorigins.win/raw?url=${encodeURIComponent(TARGET_API)}`;
         
         let allChannels = [];
 
@@ -176,7 +179,6 @@
 
         // History API Listener: Yeh browser ke back button ko handle karta hai
         window.addEventListener('popstate', function(event) {
-            // Agar history state null hai (yani hum main page par hain), toh player band kar do
             if (!event.state || event.state.view !== 'player') {
                 closePlayerUI();
             }
@@ -184,26 +186,35 @@
 
         async function fetchChannels() {
             const loadingDiv = document.getElementById('loading');
+            let response, data;
+
             try {
-                const response = await fetch(API_URL);
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                
-                const proxyData = await response.json();
-                const data = JSON.parse(proxyData.contents); 
-                
-                if(data && data.channels) {
-                    allChannels = data.channels;
-                } else {
-                    allChannels = data; 
+                // Pehlay Proxy 1 try karega
+                response = await fetch(PROXY_1);
+                if (!response.ok) throw new Error("Proxy 1 failed");
+                data = await response.json();
+            } catch (error1) {
+                console.log("Proxy 1 down, trying Proxy 2...");
+                try {
+                    // Agar Proxy 1 down hai toh Proxy 2 try karega (raw format mein)
+                    response = await fetch(PROXY_2);
+                    if (!response.ok) throw new Error("Proxy 2 failed");
+                    data = await response.json();
+                } catch (error2) {
+                    console.error("Both proxies failed");
+                    loadingDiv.style.color = "#ff4444"; 
+                    loadingDiv.innerText = "Error: Data load nahi ho raha. Proxies temporarily down hain, thori dair baad try karein.";
+                    return;
                 }
-                
+            }
+
+            // Data mil gaya, ab channels nikalte hain aapke diye hue code logic ke mutabiq
+            if(data && data.channels) {
+                allChannels = data.channels;
                 loadingDiv.style.display = 'none';
                 renderChannels(allChannels);
-
-            } catch (error) {
-                console.error("Error fetching data:", error);
-                loadingDiv.style.color = "#ff4444"; 
-                loadingDiv.innerText = "Error: Data load nahi ho raha. Ad-blocker disable karein ya connection check karein.";
+            } else {
+                loadingDiv.innerText = "Error: API format change ho gaya hai.";
             }
         }
 
@@ -237,7 +248,6 @@
             const div = document.createElement('div');
             div.className = 'channel-card';
             
-            // Onclick par ab naya openPlayer function call hoga
             div.onclick = () => openPlayer(channel.url);
 
             const statusClass = channel.status && channel.status.toLowerCase() === 'online' ? 'status-online' : 'status-offline';
@@ -267,9 +277,7 @@
             renderChannels(filteredChannels);
         }
 
-        // Open Player (aur history update karein)
         function openPlayer(streamUrl) {
-            // Browser history mein ek state push karte hain taake back button active ho jaye
             history.pushState({ view: 'player' }, '', '#player');
             
             document.getElementById('main-view').style.display = 'none';
@@ -280,7 +288,6 @@
             iframe.src = streamUrl; 
         }
 
-        // Close Player Logic (Yeh tab call hoga jab back arrow press hoga)
         function closePlayerUI() {
             document.getElementById('player-screen').style.display = 'none';
             document.getElementById('main-view').style.display = 'block';
@@ -288,4 +295,4 @@
         }
     </script>
 </body>
-</html>
+</html> -->
