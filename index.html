@@ -167,113 +167,134 @@
         <iframe id="tv-player" allowfullscreen scrolling="no"></iframe>
     </div>
 
-    <script>
-        let allChannels = []; // Store all channels here so we can search them without reloading
+<script>
+    let allChannels = []; 
 
-        document.addEventListener('DOMContentLoaded', fetchLocalData);
+    document.addEventListener('DOMContentLoaded', fetchLocalData);
 
-        // Handle the back button on mobile/desktop to close the player
-        window.addEventListener('popstate', function(event) {
-            if (!event.state || event.state.view !== 'player') {
-                closePlayerUI();
+    // Jab URL ka hash change ho (ya user back/forward button dabaye)
+    window.addEventListener('hashchange', checkHashForPlayer);
+
+    async function fetchLocalData() {
+        const messageDiv = document.getElementById('message');
+
+        try {
+            const response = await fetch('./data.json');
+            
+            if (!response.ok) {
+                throw new Error("Could not find data.json");
             }
-        });
 
-        async function fetchLocalData() {
-            const messageDiv = document.getElementById('message');
+            const data = await response.json();
+            
+            if (data && data.channels) {
+                allChannels = data.channels;
+                messageDiv.style.display = 'none'; 
+                renderChannels(allChannels);
 
-            try {
-                // Fetch directly from the local file
-                const response = await fetch('./data.json');
-                
-                if (!response.ok) {
-                    throw new Error("Could not find data.json");
-                }
-
-                const data = await response.json();
-                
-                if (data && data.channels) {
-                    allChannels = data.channels;
-                    messageDiv.style.display = 'none'; // Hide loading text
-                    renderChannels(allChannels);
-                } else {
-                    messageDiv.style.color = "#ff4444";
-                    messageDiv.innerText = "Error: Invalid data format in data.json";
-                }
-
-            } catch (error) {
-                console.error("Fetch Error:", error);
+                // Data load hone ke baad check karo ke direct link toh open nahi kiya?
+                checkHashForPlayer();
+            } else {
                 messageDiv.style.color = "#ff4444";
-                messageDiv.innerHTML = `
-                    <b>Error loading data.json</b><br><br>
-                    Make sure your file is named exactly <code>data.json</code> and is in the same folder.<br>
-                    <i>Note: If you opened this file by double-clicking it, your browser might block it. You need to use a local server like VS Code Live Server.</i>
-                `;
+                messageDiv.innerText = "Error: Invalid data format in data.json";
             }
+
+        } catch (error) {
+            console.error("Fetch Error:", error);
+            messageDiv.style.color = "#ff4444";
+            messageDiv.innerHTML = `
+                <b>Error loading data.json</b><br><br>
+                Make sure your file is named exactly <code>data.json</code>.
+            `;
+        }
+    }
+
+    // Channels ko screen par dikhana
+    function renderChannels(channelsToRender) {
+        const container = document.getElementById('channels-container');
+        container.innerHTML = ''; 
+
+        if (channelsToRender.length === 0) {
+            container.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: #aaa;">No channels found.</div>';
+            return;
         }
 
-        // Display the channels on the screen
-        function renderChannels(channelsToRender) {
-            const container = document.getElementById('channels-container');
-            container.innerHTML = ''; // Clear previous channels
+        channelsToRender.forEach(channel => {
+            const card = document.createElement('div');
+            card.className = 'channel-card';
+            
+            // Yahan hum openPlayer ko URL pass kar rahe hain
+            card.onclick = () => openPlayer(channel.url);
 
-            if (channelsToRender.length === 0) {
-                container.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: #aaa;">No channels found.</div>';
-                return;
-            }
+            const imgSrc = channel.image ? channel.image : 'https://via.placeholder.com/80x80?text=No+Logo';
+            const isOnline = channel.status.toLowerCase() === 'online';
+            const statusClass = isOnline ? 'status-online' : 'status-offline';
 
-            channelsToRender.forEach(channel => {
-                const card = document.createElement('div');
-                card.className = 'channel-card';
-                card.onclick = () => openPlayer(channel.url);
+            card.innerHTML = `
+                <img src="${imgSrc}" class="channel-logo" onerror="this.src='https://via.placeholder.com/80x80?text=Logo'">
+                <div class="channel-name">${channel.name}</div>
+                <div class="status-badge ${statusClass}">${channel.status}</div>
+            `;
 
-                // Default image if null
-                const imgSrc = channel.image ? channel.image : 'https://via.placeholder.com/80x80?text=No+Logo';
+            container.appendChild(card);
+        });
+    }
+
+    // Search Bar Logic
+    function filterChannels() {
+        const query = document.getElementById('search-bar').value.toLowerCase();
+        const filteredData = allChannels.filter(channel => {
+            return channel.name.toLowerCase().includes(query);
+        });
+        renderChannels(filteredData);
+    }
+
+    // NAYA SYSTEM: Deep Linking Player Setup
+    function openPlayer(streamUrl) {
+        // Stream URL ko encode karke browser ke URL mein daal do
+        const encodedUrl = btoa(streamUrl); // Base64 encoding
+        window.location.hash = 'play=' + encodedUrl; 
+        // Hash change hone par checkHashForPlayer() auto-run ho jayega
+    }
+
+    function closePlayerUI() {
+        // URL se hash khatam kar do taake wapas home page par aa jaye
+        history.pushState("", document.title, window.location.pathname + window.location.search);
+        
+        document.getElementById('player-screen').style.display = 'none';
+        document.getElementById('main-view').style.display = 'block';
+        document.getElementById('tv-player').src = "";
+    }
+
+    // Yeh function check karega ke URL mein koi video play karne ka link hai ya nahi
+    function checkHashForPlayer() {
+        const hash = window.location.hash;
+        
+        // Agar URL mein '#play=' mojood hai
+        if (hash.startsWith('#play=')) {
+            try {
+                // Base64 ko wapas original URL mein convert karo
+                const encodedUrl = hash.replace('#play=', '');
+                const streamUrl = atob(encodedUrl); 
+
+                // Player show karo aur stream chalao
+                document.getElementById('main-view').style.display = 'none';
+                const playerScreen = document.getElementById('player-screen');
+                const iframe = document.getElementById('tv-player');
                 
-                // Set Status colors
-                const isOnline = channel.status.toLowerCase() === 'online';
-                const statusClass = isOnline ? 'status-online' : 'status-offline';
-
-                card.innerHTML = `
-                    <img src="${imgSrc}" class="channel-logo" onerror="this.src='https://via.placeholder.com/80x80?text=Logo'">
-                    <div class="channel-name">${channel.name}</div>
-                    <div class="status-badge ${statusClass}">${channel.status}</div>
-                `;
-
-                container.appendChild(card);
-            });
-        }
-
-        // Search Bar Logic
-        function filterChannels() {
-            const query = document.getElementById('search-bar').value.toLowerCase();
-            
-            // Filter the master list
-            const filteredData = allChannels.filter(channel => {
-                return channel.name.toLowerCase().includes(query);
-            });
-
-            // Re-render only the matched channels
-            renderChannels(filteredData);
-        }
-
-        // Player Logic
-        function openPlayer(streamUrl) {
-            history.pushState({ view: 'player' }, '', '#player');
-            
-            document.getElementById('main-view').style.display = 'none';
-            const playerScreen = document.getElementById('player-screen');
-            const iframe = document.getElementById('tv-player');
-            
-            playerScreen.style.display = 'block';
-            iframe.src = streamUrl; 
-        }
-
-        function closePlayerUI() {
+                playerScreen.style.display = 'block';
+                iframe.src = streamUrl; 
+            } catch (e) {
+                console.error("Invalid stream link");
+                closePlayerUI(); // Link kharab ho toh wapas home par bhej do
+            }
+        } else {
+            // Agar normal URL hai toh home page show karo
             document.getElementById('player-screen').style.display = 'none';
             document.getElementById('main-view').style.display = 'block';
             document.getElementById('tv-player').src = "";
         }
-    </script>
+    }
+</script>
 </body>
 </html>
